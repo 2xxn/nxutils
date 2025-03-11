@@ -45,6 +45,8 @@ func (c *CorsAnywhere) TestPort(port uint16) *CorsAnywherePort {
 		return caPort
 	}
 
+	defer response.Body.Close()
+
 	contentBytes, _ := io.ReadAll(response.Body)
 	content := string(contentBytes)
 	isCorsAnywhere := strings.Contains(content, "This API enables cross-origin requests to anywhere.")
