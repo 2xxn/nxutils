@@ -2,19 +2,20 @@ package web
 
 import (
 	"encoding/json"
+	"regexp"
 	"strings"
 
 	"github.com/nextu1337/nxutils/io"
 )
 
 type ReactMap struct {
-	Version        int         `json:"version"`  // USELESS
-	File           string      `json:"file"`     // USELESS
-	Mappings       string      `json:"mappings"` // USELESS
-	Names          []string    `json:"names"`    // USELESS
-	SourceRoot     interface{} `json:"sourceRoot"`
-	Sources        []string    `json:"sources"`
-	SourcesContent []string    `json:"sourcesContent"`
+	Version        int      `json:"version"`    // USELESS
+	File           string   `json:"file"`       // USELESS
+	Mappings       string   `json:"mappings"`   // USELESS
+	Names          []string `json:"names"`      // USELESS
+	SourceRoot     string   `json:"sourceRoot"` // USELESS
+	Sources        []string `json:"sources"`
+	SourcesContent []string `json:"sourcesContent"`
 }
 
 func preparePath(path string, inSrc bool) string {
@@ -74,4 +75,25 @@ func UnpackReactMaps(jsonFiles [][]byte, inSrc bool) (*io.Directory, error) {
 	}
 
 	return dir, nil
+}
+
+// Grabs internal links from a React HTML file, adding .map to the end has a chance of working
+// returns a list of links (without .map or url, only relative path)
+func GrabReactLinksFromHTML(html string) []string {
+	var links []string
+
+	// Thanks ChatGPT for the regex!
+	re := regexp.MustCompile(`<(?:script[^>]*src|link[^>]*href)=["']((?=[^"']*(?:\/|^)[^\/]+\.[0-9a-f]{8}\.)[^"']+)["'][^>]*>"`)
+	matches := re.FindAllStringSubmatch(html, -1)
+
+	for _, match := range matches {
+		url := match[1]
+		if url[:4] == "http" {
+			continue // skip external links
+		}
+
+		links = append(links, url)
+	}
+
+	return links
 }
