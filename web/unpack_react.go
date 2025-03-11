@@ -2,8 +2,9 @@ package web
 
 import (
 	"encoding/json"
-	"nxutils/io"
 	"strings"
+
+	"github.com/nextu1337/nxutils/io"
 )
 
 type ReactMap struct {
