@@ -1,6 +1,8 @@
 package web
 
 import (
+	"io"
+	"net/http"
 	"regexp"
 	"slices"
 	"strings"
@@ -34,13 +36,14 @@ const (
 	ST_GITLAB   = "gitlab"  // TODO: implement
 	ST_FORGEJO  = "forgejo"
 	ST_JIRA     = "jira"
-	ST_SNRS     = "snrs"   // Synerise API
-	ST_MSLOGIN  = "msl"    // Microsoft Login page
-	ST_GMLOGIN  = "gml"    // Google Mail Login page TODO: implement
-	ST_CFACCESS = "cfa"    // Cloudflare Access login page
-	ST_NGINX    = "nginx"  // Nginx default page
-	ST_APACHE   = "apache" // Apache default page TODO: implement
-	ST_IIS      = "iis"    // IIS default page TODO: implement
+	ST_SNRS     = "snrs"    // Synerise API
+	ST_MSLOGIN  = "msl"     // Microsoft Login page
+	ST_GMLOGIN  = "gml"     // Google Mail Login page TODO: implement
+	ST_CFACCESS = "cfa"     // Cloudflare Access login page
+	ST_NGINX    = "nginx"   // Nginx default page
+	ST_APACHE   = "apache"  // Apache default page TODO: implement
+	ST_IIS      = "iis"     // IIS default page TODO: implement
+	ST_SYMFONY  = "symfony" // Symfony TODO: implement
 )
 
 // Try grabbing all emails from the HTML
@@ -72,7 +75,7 @@ func detectContentFromHTML(html string, skipArr []string) []string {
 	}
 
 	switch true {
-	case not(ST_OPENDIR) && strings.Contains(html, `<title>Index of /`):
+	case not(ST_OPENDIR) && strings.Contains(html, `<title>Index of `):
 		return next(ST_OPENDIR)
 	case not(ST_ASPNET) && isASP(html):
 		return next(ST_ASPNET)
@@ -101,6 +104,66 @@ func detectContentFromHTML(html string, skipArr []string) []string {
 	return skipArr
 }
 
+func ListOpenDirFilesRecursive(openDirBaseUrl string, relativePath string) ([]string, error) {
+	var files []string
+	TO_SKIP := []string{"Name", "Last modified", "Size", "Description", "Parent Directory"}
+
+	req, err := http.Get(openDirBaseUrl + relativePath)
+	if err != nil {
+		return nil, err
+	}
+
+	defer req.Body.Close()
+
+	content, err := io.ReadAll(req.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	re := regexp.MustCompile(`<a href=\"([^\"]+)\">(.*?)<\/a>`)
+	matches := re.FindAllStringSubmatch(string(content), -1)
+
+	for _, match := range matches {
+		if (len(match) < 3) || (match[2] == "../" || match[1] == "../") {
+			continue
+		}
+
+		if slices.Contains(TO_SKIP, match[2]) {
+			continue
+		}
+
+		if strings.HasSuffix(match[1], "/") {
+			subFiles, err := ListOpenDirFilesRecursive(openDirBaseUrl, relativePath+match[1])
+			if err != nil {
+				continue
+			}
+
+			files = append(files, subFiles...)
+		} else {
+			files = append(files, relativePath+match[1])
+		}
+	}
+
+	return files, nil
+}
+
+func HTMLDecode(s string) string {
+	toReplace := map[string]string{
+		"&lt;":   "<",
+		"&gt;":   ">",
+		"&amp;":  "&",
+		"&quot;": "\"",
+		"&apos;": "'",
+		"&nbsp;": " ",
+	}
+
+	for k, v := range toReplace {
+		s = strings.ReplaceAll(s, k, v)
+	}
+
+	return s
+}
+
 // #region Helper functions
 func getTitleFromHTML(html string) string {
 	re := regexp.MustCompile(`<title>(.*?)</title>`)
@@ -125,7 +188,7 @@ var isASP = func(html string) bool {
 }
 
 var isReact = func(html string) bool {
-	re := regexp.MustCompile(`<(?:script[^>]*src|link[^>]*href)=["']((?=[^"']*(?:\/|^)[^\/]+\.[0-9a-f]{8}\.)[^"']+)["'][^>]*>`)
+	re := regexp.MustCompile(`<(?:script[^>]*src|link[^>]*href)=["']([^"']*\.[0-9a-f]{8}\.[^"']+)["'][^>]*>`)
 
 	return re.MatchString(html)
 }

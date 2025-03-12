@@ -83,7 +83,7 @@ func GrabReactLinksFromHTML(html string) []string {
 	var links []string
 
 	// Thanks ChatGPT for the regex!
-	re := regexp.MustCompile(`<(?:script[^>]*src|link[^>]*href)=["']((?=[^"']*(?:\/|^)[^\/]+\.[0-9a-f]{8}\.)[^"']+)["'][^>]*>"`)
+	re := regexp.MustCompile(`<(?:script[^>]*src|link[^>]*href)=["']([^"']*\.[0-9a-f]{8}\.[^"']+)["'][^>]*>`)
 	matches := re.FindAllStringSubmatch(html, -1)
 
 	for _, match := range matches {
