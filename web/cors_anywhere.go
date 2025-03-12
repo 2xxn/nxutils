@@ -4,7 +4,9 @@ import (
 	"io"
 	"net/http"
 	"slices"
+	"strconv"
 	"strings"
+	"sync"
 )
 
 type CorsAnywherePort struct {
@@ -24,6 +26,8 @@ type CorsAnywhere struct {
 func NewCorsAnywhere(url string) *CorsAnywhere {
 	client := http.Client{}
 
+	url = strings.TrimSuffix(url, "/") + "/"
+
 	return &CorsAnywhere{url: url, httpClient: client}
 }
 
@@ -33,7 +37,7 @@ func (c *CorsAnywhere) TestPort(port uint16) *CorsAnywherePort {
 		IsOpen:         false,
 		IsHttp:         false,
 		IsCorsAnywhere: false,
-		AsUrl:          c.url + "http://127.0.0.1:" + string(port),
+		AsUrl:          c.url + "http://127.0.0.1:" + strconv.Itoa(int(port)),
 	}
 
 	request, _ := http.NewRequest("GET", caPort.AsUrl, nil)
@@ -70,13 +74,38 @@ func (c *CorsAnywhere) TestPort(port uint16) *CorsAnywherePort {
 	return caPort
 }
 
-func (c *CorsAnywhere) TestPorts(ports []uint16) {
-	c.openPorts = []*CorsAnywherePort{}
+func (c *CorsAnywhere) TestPorts(ports []uint16, threads uint8) []*CorsAnywherePort {
+	var caPorts []*CorsAnywherePort
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+
+	threadsChan := make(chan struct{}, threads)
 
 	for _, port := range ports {
-		c.openPorts = append(c.openPorts, c.TestPort(port))
+		wg.Add(1)
+		threadsChan <- struct{}{} // Acquire a slot in the semaphore
+
+		go func(p uint16) {
+			defer wg.Done()
+			defer func() { <-threadsChan }() // Release the slot in the semaphore
+
+			portResult := c.TestPort(p)
+
+			mu.Lock()
+			caPorts = append(caPorts, portResult)
+			mu.Unlock()
+		}(port)
 	}
 
+	wg.Wait() // Wait for all goroutines to finish
+
+	for _, port := range caPorts {
+		if port.IsOpen {
+			c.openPorts = append(c.openPorts, port)
+		}
+	}
+
+	return caPorts
 }
 
 func (c *CorsAnywhere) GetOpenPorts() []*CorsAnywherePort {
