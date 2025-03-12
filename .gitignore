@@ -14,6 +14,9 @@
 # Output of the go coverage tool, specifically when used with LiteIDE
 *.out
 
+# Since nxutils has virtual disk and I use them for testing ;)
+*.zip
+
 # Dependency directories (remove the comment below to include it)
 # vendor/
 
