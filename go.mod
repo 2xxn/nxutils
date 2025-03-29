@@ -1,3 +1,3 @@
-module github.com/nextu1337/nxutils
+module github.com/2xxn/nxutils
 
 go 1.21.4
