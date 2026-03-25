@@ -3,7 +3,7 @@ package web
 import (
 	"testing"
 
-	"github.com/nextu1337/nxutils/io"
+	"github.com/2xxn/nxutils/io"
 )
 
 func TestWriteFileEnv(t *testing.T) {

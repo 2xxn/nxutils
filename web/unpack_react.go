@@ -5,7 +5,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/nextu1337/nxutils/io"
+	"github.com/2xxn/nxutils/io"
 )
 
 type ReactMap struct {

@@ -8,7 +8,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/nextu1337/nxutils/io"
+	"github.com/2xxn/nxutils/io"
 )
 
 func writeSymfonyEnv(url string, vd *io.Directory) error {
