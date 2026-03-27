@@ -23,6 +23,7 @@ const (
 	PB_NGINX   = "nginx"
 	PB_PHP     = "php"
 	PB_PHP_OLD = "php_old" // PHP 5.x and older, a category on its own because of the large number of vulnerabilities
+	PB_UNKNOWN = "unknown"
 )
 
 // ST - Service Type
@@ -33,16 +34,16 @@ const (
 	ST_WEBMAIL  = "webmail" // Webmail login page (Roundcube, SquirrelMail, etc.) TODO: implement
 	ST_ASPNET   = "aspnet"  // ASP.NET errors/web services, can possibly be IIS shortname scanned
 	ST_REACT    = "react"   // React App (create-react-app), could have map files
-	ST_GITLAB   = "gitlab"  // TODO: implement
+	ST_GITLAB   = "gitlab"
 	ST_FORGEJO  = "forgejo"
 	ST_JIRA     = "jira"
 	ST_SNRS     = "snrs"    // Synerise API
 	ST_MSLOGIN  = "msl"     // Microsoft Login page
-	ST_GMLOGIN  = "gml"     // Google Mail Login page TODO: implement
+	ST_GMLOGIN  = "gml"     // Google Mail Login page
 	ST_CFACCESS = "cfa"     // Cloudflare Access login page
 	ST_NGINX    = "nginx"   // Nginx default page
-	ST_APACHE   = "apache"  // Apache default page TODO: implement
-	ST_IIS      = "iis"     // IIS default page TODO: implement
+	ST_APACHE   = "apache"  // Apache default page
+	ST_IIS      = "iis"     // IIS default page
 	ST_SYMFONY  = "symfony" // Symfony TODO: implement
 )
 
@@ -52,56 +53,85 @@ func GetEmailsFromHTML(html string) []string {
 	return re.FindAllString(html, -1)
 }
 
-// TODO: Implement
-func RecognizePBFromHeaders(headers map[string]string) {
-	// server, X-Powered-By,
+func RecognizePBFromHeaders(headers map[string]string) string {
+	getHeader := func(key string) string {
+		for k, v := range headers {
+			if strings.EqualFold(k, key) {
+				return v
+			}
+		}
+		return ""
+	}
+
+	if server := getHeader("Server"); server != "" {
+		serverLower := strings.ToLower(server)
+		switch {
+		case strings.Contains(serverLower, "iis"):
+			return PB_IIS
+		case strings.Contains(serverLower, "apache"):
+			return PB_APACHE
+		case strings.Contains(serverLower, "nginx"):
+			return PB_NGINX
+		case strings.Contains(serverLower, "php"):
+			if strings.Contains(serverLower, "5.") || strings.Contains(serverLower, "4.") {
+				return PB_PHP_OLD
+			}
+			return PB_PHP
+		}
+	}
+
+	if poweredBy := getHeader("X-Powered-By"); poweredBy != "" {
+		poweredByLower := strings.ToLower(poweredBy)
+		switch {
+		case strings.Contains(poweredByLower, "php"):
+			if strings.Contains(poweredByLower, "5.") || strings.Contains(poweredByLower, "4.") {
+				return PB_PHP_OLD
+			}
+			return PB_PHP
+		case strings.Contains(poweredByLower, "asp.net") || strings.Contains(poweredByLower, "iis"):
+			return PB_IIS
+		}
+	}
+
+	return PB_UNKNOWN
 }
 
 func RecognizeContentFromHTML(html string) []string {
-	return detectContentFromHTML(html, []string{})
+	return detectContentFromHTMLIter(html)
 }
 
-func detectContentFromHTML(html string, skipArr []string) []string {
-	if len(skipArr) > 100 {
-		return skipArr
+func detectContentFromHTMLIter(html string) []string {
+	detected := []string{}
+	skip := map[string]struct{}{}
+
+	check := func(name string, cond bool) {
+		if cond {
+			if _, exists := skip[name]; !exists {
+				detected = append(detected, name)
+				skip[name] = struct{}{}
+			}
+		}
 	}
 
-	next := func(whatToSkip string) []string {
-		return detectContentFromHTML(html, append(skipArr, whatToSkip))
-	}
+	title := getTitleFromHTML(html)
 
-	not := func(v string) bool {
-		return !slices.Contains(skipArr, v)
-	}
+	check(ST_OPENDIR, strings.Contains(html, `<title>Index of `))
+	check(ST_ASPNET, isASP(html))
+	check(ST_REACT, isReact(html))
+	check(ST_DBA, isDBA(html))
+	check(ST_JENKINS, strings.HasPrefix(title, "Jenkins"))
+	check(ST_JIRA, strings.Contains(html, `id="jira"`))
+	check(ST_FORGEJO, strings.Contains(html, `href="https://forgejo.org"`))
+	check(ST_SNRS, strings.HasPrefix(title, "Synerise "))
+	check(ST_CFACCESS, strings.HasSuffix(title, "Cloudflare Access"))
+	check(ST_NGINX, strings.Contains(html, "Welcome to nginx!"))
+	check(ST_APACHE, strings.Contains(html, "Apache2 Debian Default Page"))
+	check(ST_GMLOGIN, strings.Contains(html, "Sign in - Google Accounts"))
+	check(ST_IIS, strings.Contains(html, "Welcome to IIS!"))
+	check(ST_GITLAB, strings.Contains(html, "GitLab"))
+	check(ST_MSLOGIN, strings.Contains(html, " Copyright (C) Microsoft Corporation. All rights reserved."))
 
-	switch true {
-	case not(ST_OPENDIR) && strings.Contains(html, `<title>Index of `):
-		return next(ST_OPENDIR)
-	case not(ST_ASPNET) && isASP(html):
-		return next(ST_ASPNET)
-	case not(ST_REACT) && isReact(html):
-		return next(ST_REACT)
-	case not(ST_DBA) && isDBA(html):
-		return next(ST_DBA)
-	case not(ST_JENKINS) && strings.HasPrefix(getTitleFromHTML(html), "Jenkins"):
-		return next(ST_JENKINS)
-	case not(ST_JIRA) && strings.Contains(html, "id=\"jira\""):
-		return next(ST_JIRA)
-	case not(ST_FORGEJO) && strings.Contains(html, "href=\"https://forgejo.org\""):
-		return next(ST_FORGEJO)
-	case not(ST_SNRS) && strings.HasPrefix(getTitleFromHTML(html), "Synerise "):
-		return next(ST_SNRS)
-	case not(ST_CFACCESS) && strings.HasSuffix(getTitleFromHTML(html), "Cloudflare Access"):
-		return next(ST_CFACCESS)
-	case not(ST_NGINX) && strings.Contains(html, "Welcome to nginx!"):
-		return next(ST_NGINX)
-	case not(ST_APACHE) && strings.Contains(html, "Apache2 Debian Default Page"): // TODO: Improve
-		return next(ST_APACHE)
-	case not(ST_MSLOGIN) && strings.Contains(html, " Copyright (C) Microsoft Corporation. All rights reserved."):
-		return next(ST_MSLOGIN)
-	}
-
-	return skipArr
+	return detected
 }
 
 func ListOpenDirFilesRecursive(openDirBaseUrl string, relativePath string) ([]string, error) {
@@ -182,6 +212,9 @@ var isASP = func(html string) bool {
 		strings.Contains(html, "System.Web.HttpException"),
 		strings.Contains(html, "System.UriFormatException"),
 		strings.Contains(html, "<%@ WebService"),
+
+		strings.Contains(html, "aspnetForm"),
+		regexp.MustCompile(`href\s*=\s*"(?:[\w\-/\.]+)\.(?:aspx|ashx|asmx)"`).MatchString(html),
 	}
 
 	return slices.Contains(checks, true)
