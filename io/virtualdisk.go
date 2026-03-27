@@ -278,3 +278,45 @@ func (d *Directory) CreateDirectory(relativePath string) {
 		currentDir = nextDir
 	}
 }
+
+func (d *Directory) EmbedDirectory(mountPoint string, sourceDisk *Directory) {
+	if sourceDisk == nil {
+		return
+	}
+
+	mountPoint = strings.Trim(mountPoint, "/")
+
+	var targetDir *Directory
+
+	if mountPoint == "" {
+		targetDir = d
+	} else {
+		targetDir = d.GetDirectory(mountPoint)
+		if targetDir == nil {
+			d.CreateDirectory(mountPoint)
+			targetDir = d.GetDirectory(mountPoint)
+		}
+	}
+
+	// Recursively copy all files and directories from sourceDisk to targetDir
+	var copyDir func(source *Directory, dest *Directory)
+	copyDir = func(source *Directory, dest *Directory) {
+		for _, file := range source.Files {
+			contentCopy := make([]byte, len(file.Content))
+			copy(contentCopy, file.Content)
+
+			dest.WriteFile(file.Name, contentCopy)
+		}
+
+		for _, subDir := range source.Directories {
+			dest.CreateDirectory(subDir.Path)
+
+			newDest := dest.GetDirectory(subDir.Path)
+			if newDest != nil {
+				copyDir(subDir, newDest)
+			}
+		}
+	}
+
+	copyDir(sourceDisk, targetDir)
+}
