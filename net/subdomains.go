@@ -50,6 +50,9 @@ func GetSubdomains(domain string) ([]string, error) {
 	}
 
 	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return domainsArr, nil
+	}
 
 	data, err := io.ReadAll(resp.Body)
 	if err != nil {

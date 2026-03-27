@@ -18,12 +18,14 @@ type CRWebsite struct {
 
 // PB - Powered By
 const (
-	PB_IIS     = "iis"
-	PB_APACHE  = "apache"
-	PB_NGINX   = "nginx"
-	PB_PHP     = "php"
-	PB_PHP_OLD = "php_old" // PHP 5.x and older, a category on its own because of the large number of vulnerabilities
-	PB_UNKNOWN = "unknown"
+	PB_IIS        = "iis"
+	PB_APACHE     = "apache"
+	PB_NGINX      = "nginx"
+	PB_PHP        = "php"
+	PB_PHP_OLD    = "php_old" // PHP 5.x and older, a category on its own because of the large number of vulnerabilities
+	PB_CLOUDFLARE = "cloudflare"
+	PB_CLOUDFRONT = "cloudfront"
+	PB_UNKNOWN    = "unknown"
 )
 
 // ST - Service Type
@@ -53,47 +55,84 @@ func GetEmailsFromHTML(html string) []string {
 	return re.FindAllString(html, -1)
 }
 
-func RecognizePBFromHeaders(headers map[string]string) string {
-	getHeader := func(key string) string {
-		for k, v := range headers {
-			if strings.EqualFold(k, key) {
-				return v
-			}
-		}
-		return ""
+func RecognizePBFromHeaders(headers map[string]string) []string {
+	normalized := map[string]string{}
+	for key, value := range headers {
+		normalized[strings.ToLower(key)] = strings.ToLower(value)
 	}
 
-	if server := getHeader("Server"); server != "" {
-		serverLower := strings.ToLower(server)
-		switch {
-		case strings.Contains(serverLower, "iis"):
-			return PB_IIS
-		case strings.Contains(serverLower, "apache"):
-			return PB_APACHE
-		case strings.Contains(serverLower, "nginx"):
-			return PB_NGINX
-		case strings.Contains(serverLower, "php"):
-			if strings.Contains(serverLower, "5.") || strings.Contains(serverLower, "4.") {
-				return PB_PHP_OLD
+	detected := []string{}
+	seen := map[string]struct{}{}
+
+	add := func(pb string) {
+		if _, exists := seen[pb]; exists {
+			return
+		}
+
+		detected = append(detected, pb)
+		seen[pb] = struct{}{}
+	}
+
+	detectFromValue := func(value string) {
+		if value == "" {
+			return
+		}
+
+		rules := []struct {
+			pb      string
+			needles []string
+		}{
+			{pb: PB_CLOUDFLARE, needles: []string{"cloudflare"}},
+			{pb: PB_CLOUDFRONT, needles: []string{"cloudfront"}},
+			{pb: PB_IIS, needles: []string{"iis", "asp.net"}},
+			{pb: PB_APACHE, needles: []string{"apache"}},
+			{pb: PB_NGINX, needles: []string{"nginx"}},
+		}
+
+		for _, rule := range rules {
+			for _, needle := range rule.needles {
+				if strings.Contains(value, needle) {
+					add(rule.pb)
+					break
+				}
 			}
-			return PB_PHP
+		}
+
+		if strings.Contains(value, "php") {
+			if strings.Contains(value, "php/5.") || strings.Contains(value, "php/4.") {
+				add(PB_PHP_OLD)
+				return
+			}
+
+			add(PB_PHP)
 		}
 	}
 
-	if poweredBy := getHeader("X-Powered-By"); poweredBy != "" {
-		poweredByLower := strings.ToLower(poweredBy)
-		switch {
-		case strings.Contains(poweredByLower, "php"):
-			if strings.Contains(poweredByLower, "5.") || strings.Contains(poweredByLower, "4.") {
-				return PB_PHP_OLD
-			}
-			return PB_PHP
-		case strings.Contains(poweredByLower, "asp.net") || strings.Contains(poweredByLower, "iis"):
-			return PB_IIS
-		}
+	for _, key := range []string{"server", "x-powered-by", "via", "x-cache"} {
+		detectFromValue(normalized[key])
 	}
 
-	return PB_UNKNOWN
+	if _, ok := normalized["cf-ray"]; ok {
+		add(PB_CLOUDFLARE)
+	}
+
+	if _, ok := normalized["cf-cache-status"]; ok {
+		add(PB_CLOUDFLARE)
+	}
+
+	if _, ok := normalized["x-amz-cf-id"]; ok {
+		add(PB_CLOUDFRONT)
+	}
+
+	if _, ok := normalized["x-amz-cf-pop"]; ok {
+		add(PB_CLOUDFRONT)
+	}
+
+	if len(detected) == 0 {
+		return []string{PB_UNKNOWN}
+	}
+
+	return detected
 }
 
 func RecognizeContentFromHTML(html string) []string {
