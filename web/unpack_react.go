@@ -2,6 +2,7 @@ package web
 
 import (
 	"encoding/json"
+	"path"
 	"regexp"
 	"strings"
 
@@ -9,44 +10,43 @@ import (
 )
 
 type ReactMap struct {
-	Version        int      `json:"version"`    // USELESS
-	File           string   `json:"file"`       // USELESS
-	Mappings       string   `json:"mappings"`   // USELESS
-	Names          []string `json:"names"`      // USELESS
-	SourceRoot     string   `json:"sourceRoot"` // USELESS
+	// Version        int      `json:"version"`
+	// File           string   `json:"file"`
+	// Mappings       string   `json:"mappings"`
+	// Names          []string `json:"names"`
+	// SourceRoot     string   `json:"sourceRoot"`
+	// commented out until i find a use for these
 	Sources        []string `json:"sources"`
 	SourcesContent []string `json:"sourcesContent"`
 }
 
-func preparePath(path string, inSrc bool) string {
-	pathParts := strings.Split(path, "/")
-	prefix := "src/"
-	if !inSrc {
-		prefix = ""
-	}
-
-	if len(pathParts) == 0 {
+func preparePath(p string, inSrc bool) string {
+	if p == "" {
 		return ""
 	}
 
-	if len(pathParts) == 1 {
-		return prefix + path
+	cleanPath := path.Clean(p)
+
+	for strings.HasPrefix(cleanPath, "..") {
+		cleanPath = strings.TrimPrefix(cleanPath, "../")
+		cleanPath = path.Clean(cleanPath)
+		if cleanPath == "." {
+			cleanPath = ""
+			break
+		}
 	}
 
-	if pathParts[0] == ".." {
-		// if pathParts[1] == "webpack" {
-		// 	// cba handling it, don't understand
-		// 	return ""
-		// }
+	cleanPath = strings.TrimPrefix(cleanPath, "./")
 
-		return strings.Join(pathParts[1:], "/")
+	if cleanPath == "" {
+		return ""
 	}
 
-	if pathParts[0] == "." {
-		return prefix + strings.Join(pathParts[1:], "/")
+	if inSrc {
+		cleanPath = path.Join("src", cleanPath)
 	}
 
-	return prefix + path
+	return cleanPath
 }
 
 // jsonFiles is multiple .map file contents
