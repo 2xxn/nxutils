@@ -16,7 +16,7 @@ type Port struct {
 }
 
 func isTCPPortOpen(address string, port int, timeout time.Duration) bool {
-	target := fmt.Sprintf("%s:%d", address, port)
+	target := net.JoinHostPort(address, fmt.Sprintf("%d", port))
 	conn, err := net.DialTimeout("tcp", target, timeout)
 	if err != nil {
 		return false
@@ -26,7 +26,7 @@ func isTCPPortOpen(address string, port int, timeout time.Duration) bool {
 }
 
 func isUDPPortOpen(address string, port int, timeout time.Duration) bool {
-	target := fmt.Sprintf("%s:%d", address, port)
+	target := net.JoinHostPort(address, fmt.Sprintf("%d", port))
 	conn, err := net.DialTimeout("udp", target, timeout)
 	if err != nil {
 		return false
