@@ -30,23 +30,25 @@ const (
 
 // ST - Service Type
 const (
-	ST_OPENDIR  = "open" // Directory listing
-	ST_DBA      = "dba"  // Database Administration System (phpMyAdmin, phpPgAdmin, etc.)
-	ST_JENKINS  = "jenkins"
-	ST_WEBMAIL  = "webmail" // Webmail login page (Roundcube, SquirrelMail, etc.) TODO: implement
-	ST_ASPNET   = "aspnet"  // ASP.NET errors/web services, can possibly be IIS shortname scanned
-	ST_REACT    = "react"   // React App (create-react-app), could have map files
-	ST_GITLAB   = "gitlab"
-	ST_FORGEJO  = "forgejo"
-	ST_JIRA     = "jira"
-	ST_SNRS     = "snrs"    // Synerise API
-	ST_MSLOGIN  = "msl"     // Microsoft Login page
-	ST_GMLOGIN  = "gml"     // Google Mail Login page
-	ST_CFACCESS = "cfa"     // Cloudflare Access login page
-	ST_NGINX    = "nginx"   // Nginx default page
-	ST_APACHE   = "apache"  // Apache default page
-	ST_IIS      = "iis"     // IIS default page
-	ST_SYMFONY  = "symfony" // Symfony TODO: implement
+	ST_WORDPRESS = "wordpress"
+	ST_JOOMLA    = "joomla"
+	ST_DRUPAL    = "drupal"
+	ST_OPENDIR   = "open" // Directory listing
+	ST_DBA       = "dba"  // Database Administration System (phpMyAdmin, phpPgAdmin, etc.)
+	ST_JENKINS   = "jenkins"
+	ST_ASPNET    = "aspnet" // ASP.NET errors/web services, can possibly be IIS shortname scanned
+	ST_REACT     = "react"  // React App (create-react-app), could have map files
+	ST_GITLAB    = "gitlab"
+	ST_FORGEJO   = "forgejo"
+	ST_JIRA      = "jira"
+	ST_SNRS      = "snrs"   // Synerise API
+	ST_MSLOGIN   = "msl"    // Microsoft Login page
+	ST_GMLOGIN   = "gml"    // Google Mail Login page
+	ST_CFACCESS  = "cfa"    // Cloudflare Access login page
+	ST_NGINX     = "nginx"  // Nginx default page
+	ST_APACHE    = "apache" // Apache default page
+	ST_IIS       = "iis"    // IIS default page
+	// ST_SYMFONY   = "symfony" // Symfony TODO: implement
 )
 
 // Try grabbing all emails from the HTML
@@ -166,9 +168,13 @@ func detectContentFromHTMLIter(html string) []string {
 	check(ST_NGINX, strings.Contains(html, "Welcome to nginx!"))
 	check(ST_APACHE, strings.Contains(html, "Apache2 Debian Default Page"))
 	check(ST_GMLOGIN, strings.Contains(html, "Sign in - Google Accounts"))
-	check(ST_IIS, strings.Contains(html, "Welcome to IIS!"))
+	check(ST_IIS, strings.Contains(title, "IIS Windows Server"))
 	check(ST_GITLAB, strings.Contains(html, "GitLab"))
 	check(ST_MSLOGIN, strings.Contains(html, " Copyright (C) Microsoft Corporation. All rights reserved."))
+	check(ST_WORDPRESS, strings.Contains(html, "wp-content"))
+	check(ST_JOOMLA, strings.Contains(html, "content=\"Joomla! - Open Source Content Management\""))
+	check(ST_JOOMLA, strings.Contains(html, "/using-joomla/"))
+	check(ST_DRUPAL, strings.Contains(html, "data-drupal-"))
 
 	return detected
 }
@@ -254,6 +260,9 @@ var isASP = func(html string) bool {
 
 		strings.Contains(html, "aspnetForm"),
 		regexp.MustCompile(`href\s*=\s*"(?:[\w\-/\.]+)\.(?:aspx|ashx|asmx)"`).MatchString(html),
+		// ASP.NET error pages often contain the error message in the body, and a 200 OK status code, which is a pain to detect without parsing the HTML
+		strings.Contains(html, "<title>403 - Forbidden: Access is denied.</title>"),
+		strings.Contains(html, "<title>404 - File or directory not found.</title>"),
 	}
 
 	return slices.Contains(checks, true)
